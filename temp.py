@@ -154,44 +154,31 @@ st.set_page_config(
     layout="centered",
 )
 
-# Custom CSS for styling the text area and button
-custom_css = """
+# Custom CSS for styling the text area and button with Tailwind CSS
+tailwind_css = """
 <style>
+@import url('https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css');
+
 .custom-textarea {
-    background-color: #f9f9f9;
-    border: 2px solid #ddd;
-    border-radius: 8px;
-    padding: 10px;
-    font-size: 16px;
-    width: 100%;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    transition: border-color 0.3s ease;
+    @apply bg-gray-100 border-2 border-gray-300 rounded-lg p-4 text-lg w-full shadow-md transition-all duration-300;
 }
 
 .custom-textarea:focus {
-    border-color: #007bff;
-    outline: none;
+    @apply border-blue-500 outline-none;
 }
 
 .custom-button {
-    background-color: #007bff;
-    color: white;
-    border: none;
-    border-radius: 8px;
-    padding: 10px 20px;
-    font-size: 16px;
-    cursor: pointer;
-    transition: background-color 0.3s ease;
+    @apply bg-blue-500 text-white border-none rounded-lg py-2 px-4 text-lg cursor-pointer transition-all duration-300;
 }
 
 .custom-button:hover {
-    background-color: #0056b3;
+    @apply bg-blue-700;
 }
 </style>
 """
 
 # Inject custom CSS
-st.markdown(custom_css, unsafe_allow_html=True)
+st.markdown(tailwind_css, unsafe_allow_html=True)
 
 def main():
     st.title("Email Verification Tool", help="This tool verifies the validity of an email address.")
@@ -200,9 +187,9 @@ def main():
     t1, t2 = st.tabs(["Single Email", "Bulk Email Processing"])
 
     with t1:
-        email = st.text_input("Enter an email address:")
+        email = st.text_input("Enter an email address:", key="single_email", placeholder="e.g., example@domain.com", className="custom-textarea")
         
-        if st.button("Verify"):
+        if st.button("Verify", key="single_verify", className="custom-button"):
             with st.spinner('Verifying...'):
                 result = {}
 
@@ -255,7 +242,7 @@ def main():
                             if is_valid:
                                 st.success(f"{email} is a Valid email")
                             else:
-                                st.error(f"{email} is a Invalid email")
+                                st.error(f"{email} is an Invalid email")
                                 if result['isDisposable']:
                                     st.text("It is a disposable email")
 
@@ -270,9 +257,10 @@ def main():
             height=200,
             key="pasted_emails",
             help="You can paste a list of emails separated by commas or newlines.",
+            className="custom-textarea"
         )
         
-        if st.button("Validate Pasted Emails", key="validate_pasted_emails"):
+        if st.button("Validate Pasted Emails", key="validate_pasted_emails", className="custom-button"):
             if pasted_emails:
                 with st.spinner("Validating pasted emails..."):
                     process_pasted_emails(pasted_emails)
