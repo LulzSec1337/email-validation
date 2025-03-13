@@ -187,9 +187,9 @@ def main():
     t1, t2 = st.tabs(["Single Email", "Bulk Email Processing"])
 
     with t1:
-        email = st.text_input("Enter an email address:", key="single_email", placeholder="e.g., example@domain.com", className="custom-textarea")
+        email = st.text_input("Enter an email address:", key="single_email", placeholder="e.g., example@domain.com")
         
-        if st.button("Verify", key="single_verify", className="custom-button"):
+        if st.button("Verify", key="single_verify"):
             with st.spinner('Verifying...'):
                 result = {}
 
@@ -256,11 +256,10 @@ def main():
             "Paste emails here (one per line or separated by commas)",
             height=200,
             key="pasted_emails",
-            help="You can paste a list of emails separated by commas or newlines.",
-            className="custom-textarea"
+            help="You can paste a list of emails separated by commas or newlines."
         )
         
-        if st.button("Validate Pasted Emails", key="validate_pasted_emails", className="custom-button"):
+        if st.button("Validate Pasted Emails", key="validate_pasted_emails"):
             if pasted_emails:
                 with st.spinner("Validating pasted emails..."):
                     process_pasted_emails(pasted_emails)
