@@ -8,6 +8,8 @@ import pandas as pd
 import streamlit as st
 from streamlit_extras.metric_cards import style_metric_cards
 import whois
+import base64
+import json
 
 CACHE_TTL = 600
 
@@ -123,29 +125,56 @@ def validate_email(email):
 def process_txt(file):
     emails = file.read().decode('utf-8').splitlines()
     results = []
+    valid_emails = []
     for email in emails:
         is_valid, message = validate_email(email)
         results.append([email, message])
+        if is_valid:
+            valid_emails.append(email)
     result_df = pd.DataFrame(results, columns=['Email', 'Status'])
     st.dataframe(result_df)
+    return valid_emails
 
 def process_csv(file):
     df = pd.read_csv(file)
     results = []
+    valid_emails = []
     for email in df['Email']:
         is_valid, message = validate_email(email)
         results.append([email, message])
+        if is_valid:
+            valid_emails.append(email)
     result_df = pd.DataFrame(results, columns=['Email', 'Status'])
-    return result_df
+    st.dataframe(result_df)
+    return valid_emails
 
 def process_pasted_emails(pasted_emails):
     emails = [email.strip() for email in pasted_emails.replace(',', '\n').splitlines() if email.strip()]
     results = []
+    valid_emails = []
     for email in emails:
         is_valid, message = validate_email(email)
         results.append([email, message])
+        if is_valid:
+            valid_emails.append(email)
     result_df = pd.DataFrame(results, columns=['Email', 'Status'])
     st.dataframe(result_df)
+    return valid_emails
+
+def download_file(data, file_type):
+    if file_type == "csv":
+        csv = data.to_csv(index=False).encode('utf-8')
+        b64 = base64.b64encode(csv).decode()
+        href = f'<a href="data:file/csv;base64,{b64}" download="valid_emails.csv">Download CSV</a>'
+    elif file_type == "txt":
+        txt = "\n".join(data).encode('utf-8')
+        b64 = base64.b64encode(txt).decode()
+        href = f'<a href="data:file/txt;base64,{b64}" download="valid_emails.txt">Download TXT</a>'
+    elif file_type == "json":
+        json_data = json.dumps(data, indent=4).encode('utf-8')
+        b64 = base64.b64encode(json_data).decode()
+        href = f'<a href="data:file/json;base64,{b64}" download="valid_emails.json">Download JSON</a>'
+    return href
 
 # Set page configuration
 st.set_page_config(
@@ -154,126 +183,40 @@ st.set_page_config(
     layout="centered",
 )
 
-# Custom CSS for styling the text area and button with Tailwind CSS
-tailwind_css = """
+# Custom CSS for HTB-like styling
+custom_css = """
 <style>
-@import url('https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css');
-
+body {
+    background-color: #0d1117;
+    color: #c9d1d9;
+    font-family: 'Courier New', Courier, monospace;
+}
 .custom-textarea {
-    @apply bg-gray-100 border-2 border-gray-300 rounded-lg p-4 text-lg w-full shadow-md transition-all duration-300;
+    background-color: #161b22;
+    border: 2px solid #30363d;
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 16px;
+    width: 100%;
+    color: #c9d1d9;
 }
-
-.custom-textarea:focus {
-    @apply border-blue-500 outline-none;
-}
-
 .custom-button {
-    @apply bg-blue-500 text-white border-none rounded-lg py-2 px-4 text-lg cursor-pointer transition-all duration-300;
+    background-color: #238636;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 20px;
+    font-size: 16px;
+    cursor: pointer;
 }
-
 .custom-button:hover {
-    @apply bg-blue-700;
+    background-color: #2ea043;
 }
 </style>
 """
 
 # Inject custom CSS
-st.markdown(tailwind_css, unsafe_allow_html=True)
+st.markdown(custom_css, unsafe_allow_html=True)
 
-def main():
-    st.title("Email Verification Tool", help="This tool verifies the validity of an email address.")
-    st.info("The result may not be accurate. However, it has 90% accuracy.")
-
-    t1, t2 = st.tabs(["Single Email", "Bulk Email Processing"])
-
-    with t1:
-        email = st.text_input("Enter an email address:", key="single_email", placeholder="e.g., example@domain.com")
-        
-        if st.button("Verify", key="single_verify"):
-            with st.spinner('Verifying...'):
-                result = {}
-
-                result['syntaxValidation'] = is_valid_email(email)
-
-                if result['syntaxValidation']:
-                    domain_part = email.split('@')[1] if '@' in email else ''
-
-                    if not domain_part:
-                        st.error("Invalid email format. Please enter a valid email address.")
-                    else:
-                        if not has_valid_mx_record(domain_part):
-                            st.warning("Not valid: MX record not found.")
-                        else:
-                            result['MXRecord'] = has_valid_mx_record(domain_part)
-                            if result['MXRecord']:
-                                result['smtpConnection'] = verify_email(email)
-                            else:
-                                result['smtpConnection'] = False
-
-                            result['isDisposable'] = is_disposable(domain_part)
-
-                            is_valid = (
-                                result['syntaxValidation']
-                                and result['MXRecord']
-                                and result['smtpConnection']
-                                and not result['isDisposable']
-                            )
-
-                            st.markdown("**Result:**")
-
-                            col1, col2, col3 = st.columns(3)
-                            col1.metric(label="Syntax", value=result['syntaxValidation'])
-                            col2.metric(label="MX Record", value=result['MXRecord'])
-                            col3.metric(label="Is Disposable", value=result['isDisposable'])
-                            style_metric_cards()
-                            
-                            if not result['smtpConnection']:
-                                st.warning("SMTP connection not established.")
-                            
-                            with st.expander("See Domain Information"):
-                                try:
-                                    dm_info = whois.whois(domain_part)
-                                    st.write("Registrar:", dm_info.registrar)
-                                    st.write("Server:", dm_info.whois_server)
-                                    st.write("Country:", dm_info.country)
-                                except:
-                                    st.error("Domain information retrieval failed.")
-                            
-                            if is_valid:
-                                st.success(f"{email} is a Valid email")
-                            else:
-                                st.error(f"{email} is an Invalid email")
-                                if result['isDisposable']:
-                                    st.text("It is a disposable email")
-
-    with t2:
-        st.header("Bulk Email Processing")
-        
-        input_file = st.file_uploader("Upload a CSV or TXT file", type=["csv", "txt"])
-        
-        st.markdown("### Paste Emails Below")
-        pasted_emails = st.text_area(
-            "Paste emails here (one per line or separated by commas)",
-            height=200,
-            key="pasted_emails",
-            help="You can paste a list of emails separated by commas or newlines."
-        )
-        
-        if st.button("Validate Pasted Emails", key="validate_pasted_emails"):
-            if pasted_emails:
-                with st.spinner("Validating pasted emails..."):
-                    process_pasted_emails(pasted_emails)
-            else:
-                st.warning("Please paste some emails to validate.")
-        
-        if input_file:
-            st.write("Processing...")
-            if input_file.type == 'text/plain':
-                process_txt(input_file)
-            else:
-                df = process_csv(input_file)
-                st.success("Processing completed. Displaying results:")
-                st.dataframe(df)
-
-if __name__ == "__main__":
-    main()
+# ASCII Logo
+ascii_logo = """
