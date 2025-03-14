@@ -5,6 +5,7 @@ import whois
 from popular_domains import emailDomains
 import streamlit as st
 from streamlit_extras.metric_cards import style_metric_cards
+from streamlit.components.v1 import html
 
 # Set page configuration
 st.set_page_config(
@@ -13,12 +14,17 @@ st.set_page_config(
     layout="centered",
 )
 
-# Custom CSS for styling the text area and button
-custom_css = """
+# Custom HTML and CSS for styling
+custom_html = """
 <style>
-/* Style for the text area */
+body {
+    font-family: 'Arial', sans-serif;
+    background-color: #f4f4f9;
+    color: #333;
+}
+
 .custom-textarea {
-    background-color: #f9f9f9;
+    background-color: #fff;
     border: 2px solid #ddd;
     border-radius: 8px;
     padding: 10px;
@@ -33,7 +39,6 @@ custom_css = """
     outline: none;
 }
 
-/* Style for the validation button */
 .custom-button {
     background-color: #007bff;
     color: white;
@@ -48,11 +53,31 @@ custom_css = """
 .custom-button:hover {
     background-color: #0056b3;
 }
+
+.tab-content {
+    margin-top: 20px;
+}
+
+.metric-card {
+    background-color: #007bff;
+    color: white;
+    padding: 10px;
+    border-radius: 8px;
+    text-align: center;
+}
+
+.metric-card h4 {
+    margin: 0;
+}
+
+.metric-card p {
+    margin: 5px 0 0;
+}
 </style>
 """
 
-# Inject custom CSS
-st.markdown(custom_css, unsafe_allow_html=True)
+# Inject custom HTML and CSS
+html(custom_html)
 
 # Function to label an email
 def label_email(email):
@@ -66,7 +91,7 @@ def label_email(email):
         return "Risky"
     return "Valid"
 
-# Function to process pasted emails
+# Function to process pasted emails and return DataFrame
 def process_pasted_emails(pasted_emails):
     # Split the pasted emails by newlines and commas
     emails = [email.strip() for email in pasted_emails.replace(',', '\n').splitlines() if email.strip()]
@@ -82,8 +107,16 @@ def process_pasted_emails(pasted_emails):
     result_df = pd.DataFrame(results, columns=['Email', 'Label'])
     result_df.index = range(1, len(result_df) + 1)  # Starting index from 1
 
-    # Display the results in a table
-    st.dataframe(result_df)
+    return result_df
+
+# Function to download DataFrame as selected file type
+def download_dataframe(df, file_format):
+    if file_format == 'CSV':
+        return df.to_csv(index=False).encode('utf-8')
+    elif file_format == 'TXT':
+        return df.to_csv(index=False, sep='\t').encode('utf-8')
+    elif file_format == 'JSON':
+        return df.to_json(orient='records').encode('utf-8')
 
 # Main function
 def main():
@@ -94,9 +127,9 @@ def main():
 
     with t1:
         # Single email verification
-        email = st.text_input("Enter an email address:")
+        email = st.text_input("Enter an email address:", key="single_email", help="Enter the email address you want to verify.")
         
-        if st.button("Verify"):
+        if st.button("Verify", key="verify_single"):
             with st.spinner('Verifying...'):
                 result = {}
 
@@ -144,9 +177,9 @@ def main():
 
                             # Display metric cards with reduced text size
                             col1, col2, col3 = st.columns(3)
-                            col1.metric(label="Syntax", value=result['syntaxValidation'])
-                            col2.metric(label="MxRecord", value=result['MXRecord'])
-                            col3.metric(label="Is Temporary", value=result['is Temporary'])
+                            col1.markdown(f"<div class='metric-card'><h4>Syntax</h4><p>{result['syntaxValidation']}</p></div>", unsafe_allow_html=True)
+                            col2.markdown(f"<div class='metric-card'><h4>MxRecord</h4><p>{result['MXRecord']}</p></div>", unsafe_allow_html=True)
+                            col3.markdown(f"<div class='metric-card'><h4>Is Temporary</h4><p>{result['is Temporary']}</p></div>", unsafe_allow_html=True)
                             style_metric_cards()
                             
                             # Show SMTP connection status as a warning
@@ -167,7 +200,7 @@ def main():
                             if is_valid:
                                 st.success(f"{email} is a Valid email")
                             else:
-                                st.error(f"{email} is a Invalid email")
+                                st.error(f"{email} is an Invalid email")
                                 if result['is Temporary']:
                                     st.text("It is a disposable email")
 
@@ -186,12 +219,27 @@ def main():
             key="pasted_emails",
             help="You can paste a list of emails separated by commas or newlines.",
         )
-        
+
+        # Select file format for download
+        file_format = st.selectbox("Select file format for download", ["CSV", "TXT", "JSON"])
+
         # Add a custom validation button
         if st.button("Validate Pasted Emails", key="validate_pasted_emails", help="Click to validate the pasted emails."):
             if pasted_emails:
                 with st.spinner("Validating pasted emails..."):
-                    process_pasted_emails(pasted_emails)
+                    result_df = process_pasted_emails(pasted_emails)
+                    st.dataframe(result_df)
+
+                    # Filter valid emails
+                    valid_emails_df = result_df[result_df['Label'] == 'Valid']
+
+                    # Provide download link
+                    st.download_button(
+                        label="Download Valid Emails",
+                        data=download_dataframe(valid_emails_df, file_format),
+                        file_name=f"valid_emails.{file_format.lower()}",
+                        mime="text/csv" if file_format == 'CSV' else "text/plain" if file_format == 'TXT' else "application/json"
+                    )
             else:
                 st.warning("Please paste some emails to validate.")
         
